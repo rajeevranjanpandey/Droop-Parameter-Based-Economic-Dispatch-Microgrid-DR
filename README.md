@@ -1,6 +1,6 @@
 # Droop Parameter-Based Economic Dispatch for Islanded Microgrid Considering Demand Response
 
-This repository provides the full implementation, data, and replication framework for the research work:
+This repository contains the implementation, dataset, and reproducible results for the work:
 
 > **Droop Parameter-Based Economic Dispatch for Islanded Microgrid Considering Demand Response**  
 > Authors: *Ganesh Kumar Pandey*, *Debapriya Das*  
@@ -11,54 +11,115 @@ This repository provides the full implementation, data, and replication framewor
 
 ## 🔍 Overview
 
-This project presents a **day-ahead optimisation** framework for an **islanded AC microgrid** consisting of Droop-controlled Distributed Generators (DGs), renewable units, and incentive-based Demand Response (DR).
+This project optimises day-ahead economic dispatch in an **islanded AC microgrid** using:
 
-The optimisation integrates:
+| Module | Purpose |
+|--------|---------|
+| Droop-based DG control | Decentralised power sharing |
+| Modified Newton–Raphson | MG load flow without slack bus |
+| Particle Swarm Optimisation | Optimal droop + DR scheduling |
+| Incentive-based Demand Response | Peak load curtailment |
 
-| Component | Purpose |
-|----------|---------|
-| **P–f & Q–V droop control** | Decentralised sharing of active/reactive power |
-| **Economic Load Dispatch (ELD)** | Equal incremental cost principle |
-| **Modified Newton–Raphson (MNR) Load Flow** | Frequency-dependent power flow in islanded MG |
-| **Particle Swarm Optimisation (PSO)** | Solving multi-objective nonlinear problem |
-| **Incentive-based DR** | Peak load reduction with customer utility maximisation |
-
-The result:  
-• Reduced operating cost  
-• Improved renewable utilisation  
-• Better fairness in DG cost allocation  
-• Loading relief during peak hours
+Key benefits:
+- Reduced operating cost
+- Better fairness in DG sharing
+- Peak demand trimming via DR
+- Voltage & frequency within IEEE 1547.7 limits
 
 ---
 
-## 🧠 Mathematical Formulation
+## 🧠 Optimisation Problem
 
 ### 🎯 Objective
-Minimise:
 
-\[
+$$
+\min
 \sum_{t=1}^{24}
 \left[
-\sum_{i=1}^{N_c} (y_i^t - \gamma_i^t x_i^t)
-+ \frac{\sum_{j=1}^{N_{DG}} (\lambda_j^t - \bar{\lambda}^t)^2}
-{N_{DG}-1}
+\sum_{i=1}^{N_c}
+\left(
+y_i^t - \gamma_i^t x_i^t
+\right)
++
+\frac{
+\sum_{j=1}^{N_{\mathrm{DG}}}
+\left(
+\lambda_j^t - \bar{\lambda}^t
+\right)^2
+}{
+N_{\mathrm{DG}} - 1
+}
 \right]
-\]
+$$
 
-Where:  
-- \( \lambda_j^t \) = incremental cost of DG \(j\) at hour \(t\)  
-- \( x_i^t, y_i^t \) = curtailed power & incentive for customer \(i\)  
-- \( \gamma_i^t \) = interruptibility factor  
+Where:
+- $\lambda_j^t$ = incremental cost of DG $j$  
+- $x_i^t$ = curtailed power by customer $i$  
+- $y_i^t$ = incentive paid to customer $i$  
+- $\gamma_i^t$ = interruptibility factor  
+
+---
 
 ### 🔒 Constraints
-- DG generation limits  
-- Droop coefficient bounds  
-- Power balance:  
-  \[
-  \sum P_{DG} = P_{load} - P_{DR} + P_{loss}
-  \]
-- DR feasibility: rationality, incentive compatibility  
-- Utility daily budget \( \leq \$1000 \)
+
+#### DG output limits
+$$
+P_{j}^{\min}
+\le
+P_{j}^t
+\le
+P_{j}^{\max}
+$$
+
+#### Droop coefficient limits
+$$
+m_{p,j}^{\min}
+\le
+m_{p,j}^t
+\le
+m_{p,j}^{\max}
+\quad,\quad
+n_{q,j}^{\min}
+\le
+n_{q,j}^t
+\le
+n_{q,j}^{\max}
+$$
+
+#### Power balance
+$$
+\sum_{j=1}^{N_{\mathrm{DG}}}
+P_{DG,j}^t
+=
+P_{\mathrm{load}}^t
+-
+P_{\mathrm{DR}}^t
++
+P_{\mathrm{loss}}^t
+$$
+
+#### Demand Response Feasibility
+
+**Individual rationality**
+$$
+y_i^t - C_i(\theta_i, x_i^t) \ge 0
+$$
+
+**Incentive compatibility**
+$$
+y_i^t - C_i(\theta_i, x_i^t)
+\ge
+y_{i-1}^t - C_{i-1}(\theta_i, x_{i-1}^t)
+$$
+
+#### Utility daily budget
+$$
+\sum_{t=1}^{24}
+\sum_{i=1}^{N_c}
+y_i^t
+\le
+U_B
+$$
 
 ---
 
