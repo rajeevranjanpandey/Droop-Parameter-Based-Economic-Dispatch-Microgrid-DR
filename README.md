@@ -88,14 +88,14 @@ $$
 
 #### Power balance
 $$
-\sum_{j=1}^{N_{\mathrm{DG}}}
+\sum_{j=1}^{N_{\DG}}
 P_{DG,j}^t
 =
-P_{\mathrm{load}}^t
+P_{\load}^t
 -
-P_{\mathrm{DR}}^t
+P_{\DR}^t
 +
-P_{\mathrm{loss}}^t
+P_{\loss}^t
 $$
 
 #### Demand Response Feasibility
