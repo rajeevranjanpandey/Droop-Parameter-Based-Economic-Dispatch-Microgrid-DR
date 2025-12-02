@@ -86,17 +86,7 @@ n_{q,j}^t
 n_{q,j}^{\max}
 $$
 
-#### Power balance
-$$
-\sum_{j=1}^{N_{\DG}}
-P_{DG,j}^t
-=
-P_{\load}^t
--
-P_{\DR}^t
-+
-P_{\loss}^t
-$$
+
 
 #### Demand Response Feasibility
 
