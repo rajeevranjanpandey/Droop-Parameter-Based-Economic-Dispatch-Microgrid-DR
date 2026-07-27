@@ -1,0 +1,371 @@
+
+%%     DEMAND RESPONSE DATA
+clc
+% Table 1 Data of the three-unit system (Case study 1).
+%               Gen no.     a      b       Pmin        Pmax    mpmin mpmax npmin nqmax
+%               NQ
+Generator_data =[ 1       0.2731    0.1453       0           1000
+    2       0.4333    0.2333       0           1000
+    3       0.2731    0.1453       0           1000
+    4       0.4333    0.2333       0           1000
+    5       0.2731    0.1453       0           1000 ];
+% Table 2 Total initial hourly demand and l values (Case study 1).
+mpmin=1.502*10^(-3) ;mpmax=5.102*10^(-3);
+nqmin=.02;nqmax=.05;
+%    Time (h)        Dt(KW)     ld($)
+Hourdemand =   [  1           37.15    1.57
+    2           31.40        1.40
+    3           31.17        2.20
+    4           31.00        3.76
+    5           31.17        4.50
+    6           32.10        4.70
+    7           32.97        5.04
+    8           34.10        5.35
+    9           37.53        6.70
+    10          38.33        6.16
+    11          40.03        6.38
+    12          41.17        6.82
+    13          39.67        7.30
+    14          41.70        7.80
+    15          42.10        8.50
+    16          41.67        7.10
+    17          40.70        6.80
+    18          40.07        6.30
+    19          38.63        5.80
+    20          36.40        4.20
+    21          34.10        3.80
+    22          32.80        3.01
+    23          32.50        2.53
+    24          32.00        1.4];
+% Table 4 Customer cost function coefficients, customer type and daily customer curtailable
+%  energy limit (Case study 1)..
+%Table 3 Forecast power from the wind and solar generators (Case study 1).
+%               Time(h)       Wt (kW)     St (kW)
+Renewable_data = [ 1            7.56          0
+    2            7.50          0
+    3            8.25          0
+    4            8.48          0
+    5            8.48          0
+    6            9.42          0
+    7            9.82          0
+    8            10.35         7.99
+    9            10.88         10.56
+    10           11.01         13.61
+    11           10.94         14.97
+    12           10.68         15
+    13           10.42         14.78
+    14           10.15         14.59
+    15           9.67          13.56
+    16           8.98          11.83
+    17           8.37          10.17
+    18           7.61          7.66
+    19           6.70          0
+    20           5.72          0
+    21           7.21          0
+    22           7.75          0
+    23           7.88          0
+    24           7.69          0];
+%%
+St=Renewable_data(:,3);
+%              j       K1         K2      th        CM(kwh)
+customer_cost=[1     1.079       1.32      0         30
+    2     1.378       1.63      0.45      35
+    3     1.847       1.64      0.9       40];
+% limits of x     xmin    xmax
+range2= [0      3
+    0       3
+    0       3];
+% Table 1 Data of the three-unit system (Case study 1).
+i= Generator_data(:,1);         % conventional  generator number
+a=Generator_data(:,2);          % cost coefficient
+b=Generator_data(:,3);          % cost coefficient
+Pmin=Generator_data(:,4);       % GENERATOR REAL POWER LOWER LIMIT
+Pmax=Generator_data(:,5);       % GENERATOR REAL POWER LOWER LIMIT
+
+% Total initial hourly demand and l values (Case study 1).
+t= Hourdemand(:,1);             % time of day in hour
+D= Hourdemand(:,2);             % total initial hourly demand
+ld=Hourdemand(:,3);             % value of power interruptability
+
+%Customer cost function coefficients, customer type and daily customer curtailable
+j=customer_cost(:,1);      % customer number
+K1=customer_cost(:,2);
+K2=customer_cost(:,3);
+th=customer_cost(:,4);     % customer type
+CM=customer_cost(:,5);
+%%
+%CONSTANTS
+J=3;                  % tOTAL NO. OF CUSTOMER4
+T=1;                 % TOTAL NO. OF TIME SPAN
+UB=500;               %The microgrid DR operator's daily budget
+ww=1;
+ndg=5;
+I=ndg;                  % Total number of generators
+xmin=range2(:,1);xmax=range2(:,2);
+nf=[.9166;.9015;.8863;.8787;.8901;.8939;.9090;.9090;.9166;.9318;.9242;.9393;.9090;.9242;.9318;.9318;.9242;.9242;.9318;.9772;1;.9621;.946;.9204];
+nbuss=38;                    % no. of bus
+nbus=nbuss-(5-ndg);
+BMva=1000;
+busdd=bus_data(nbuss);      % Calling busdatas..
+busd = busdd(1:nbus,:);
+Pl000 = busd(:,7)/BMva;        % PLi..
+Ql000 = busd(:,8)/BMva;        % QLi..
+Pl00=zeros(nbus,T);
+Ql00=zeros(nbus,T);
+for iii=2:33
+    for t=1:T
+        Pl00(iii,t)=Pl000(iii);
+        Ql00(iii,t)=Ql000(iii);
+    end
+end
+%% PSO Parameters
+S=10;
+it=200;
+uma=.1;
+f=zeros(S,it);
+fp=zeros(1,S);
+df=zeros(1,(it-1));
+rp=1;
+rg=1;
+cp=2;
+cg=2;
+Tol=10;
+GCF=zeros(it+1,1);
+% initial values
+x=initialize_curtailment(xmin,xmax,J,T,S,it,CM);
+y = initialize_customers(J,T,S,K1,K2,x,th,UB);
+[mp,nq] = initialize_droop(mpmin,mpmax,nqmin,nqmax,T,I,S,it);
+% INITIAL VELOCITY
+vx=.1*x;
+vy=.1*y;
+vmp=.1*mp;
+vnq=.1*nq;
+%initial function value
+ii=0;
+for s=1:S
+    for t=1:T
+        [pdg0,qdg0,w,Pl,Ql,V,del,PLoss,QLoss]=droop_load_flow(ii,x,s,mp,nq,t,ndg,St,Pl00,Ql00);
+        pdg(:,t)=pdg0;
+        PDG1(:,s,t,ii+1)=pdg0;
+        QDG1(:,s,t,ii+1)=qdg0;
+        PL1(:,s,t,ii+1)=Pl;
+        QL1(:,s,t,ii+1)=Ql;
+        VOLTAGE1(:,s,t,ii+1)=V;
+        ANGLE1(:,s,t,ii+1)=del;
+        PLOSS1(s,t,ii+1)=PLoss;
+        QLOSS1(s,t,ii+1)=QLoss;
+        FREQUENCY1(s,t,ii+1)=w;
+    end
+    [ff,x1]=objective_function(x,y,a,b,ld,ww,T,J,I,s,ii,pdg);
+    f(s,ii+1)=ff(s,1);
+    gcf(s,1)=x1;
+end
+
+
+% % initial personal value
+fpm=min(f(:,1));
+
+for k=1:S
+    if f(k,1)==fpm
+        gb=k;
+    else
+    end
+end
+xp=x(:,:,gb,ii+1);
+yp=y(:,:,gb,ii+1);
+mpp=mp(:,:,gb,ii+1);
+nqp=nq(:,:,gb,ii+1);
+GCF(ii+1)=gcf(gb,ii+1);
+
+
+%Initial global best value
+fgm=min(f(:,ii+1));
+
+for k=1:S
+    if f(k,1)==fgm
+        gb=k;
+    else
+    end
+end
+xg=x(:,:,gb,ii+1);
+yg=y(:,:,gb,ii+1);
+mpg=mp(:,:,gb,ii+1);
+nqg=nq(:,:,gb,ii+1);
+
+PDG=PDG1(:,gb,:,ii+1);
+QDG=      QDG1(:,gb,:,ii+1);
+PL=  PL1(:,gb,:,ii+1);
+QL=  QL1(:,gb,:,ii+1);
+VOLTAGE(:,:)=   VOLTAGE1(:,gb,:,ii+1);
+ANGLE=ANGLE1(:,gb,:,ii+1);
+PLOSS= PLOSS1(gb,:,ii+1);
+QLOSS=  QLOSS1(gb,:,ii+1);
+FREQUENCY=FREQUENCY1(gb,:,ii+1);
+
+
+zzz=1;
+fff=zeros(it,1);
+fff(ii+1,1)=fgm;
+%%
+disp('| iteration | frequency | optimum function | current function | violation1 | violation2 |');
+
+for ii=1:it
+    
+    %for inertia weight W
+    wmax=0.9;
+    wmin=0.4;
+    W = wmax-(ii*((wmax-wmin)/it));
+    
+    for s=1:S
+    for i=1:I
+        for t=1:T
+            
+            
+            vmp(i,t,s,(ii+1))=W*vmp(i,t,s,ii)+rp*cp*(mpp(i,t)-mp(i,t,s,ii))+rg*cg*(mpg(i,t)-mp(i,t,s,ii));
+            vnq(i,t,s,(ii+1))=W*vnq(i,t,s,ii)+rp*cp*(nqp(i,t)-nq(i,t,s,ii))+rg*cg*(nqg(i,t)-nq(i,t,s,ii));
+            
+            
+            mp(i,t,s,(ii+1))=mp(i,t,s,ii)+uma* vmp(i,t,s,(ii+1));
+            nq(i,t,s,(ii+1))=nq(i,t,s,ii)+uma* vnq(i,t,s,(ii+1));
+            
+            
+        end
+    end
+    end
+    
+    
+    vol1=zeros(T,S);
+    for s=1:S
+        for i=1:I
+            for t=1:T
+                if  mp(i,t,s,(ii+1))<mpmin
+                    vol1(t,s)=mpmin-mp(i,t,s,(ii+1));
+                    mp(i,t,s,(ii+1))=mpmin;
+                elseif  mp(i,t,s,(ii+1))>mpmax
+                    vol1(t,s)=mpmax-mp(i,t,s,(ii+1));
+                    mp(i,t,s,(ii+1))=mpmax;
+                end
+            end
+        end
+    end
+    %
+    %%%%%%%%%%%%%%%%%
+    vol2=zeros(T,S);
+    for s=1:S
+        for i=1:I
+            
+            for t=1:T
+                if  nq(i,t,s,(ii+1))<nqmin
+                    vol2(t,s)=nq(i,t,s,(ii+1))-nqmin;
+                    nq(i,t,s,(ii+1))=nqmin;
+                elseif  nq(i,t,s,(ii+1))>nqmax
+                    vol2(t,s)=nqmax-nq(i,t,s,(ii+1));
+                    nq(i,t,s,(ii+1))=nqmax;
+                end
+            end
+        end
+    end
+    
+    %%%%%
+    
+    
+    
+    
+    
+    svol1=zeros(S,1);
+    svol2=zeros(S,1);
+    
+    for s=1:S
+        svol1(s,1)=sum(vol1(:,s));
+        svol2(s,1)=sum(vol2(:,s));
+        
+        
+    end
+    
+    for s=1:S
+        
+        
+        for t=1:T
+            [pdg0,qdg0,w,Pl,Ql,V,del,PLoss,QLoss]=droop_load_flow(ii,x,s,mp,nq,t,ndg,St,Pl00,Ql00);
+            pdg(:,t)=pdg0;
+            PDG1(:,s,t,ii+1)=pdg0;
+            QDG1(:,s,t,ii+1)=qdg0;
+            PL1(:,s,t,ii+1)=Pl;
+            QL1(:,s,t,ii+1)=Ql;
+            VOLTAGE1(:,s,t,ii+1)=V;
+            ANGLE1(:,s,t,ii+1)=del;
+            PLOSS1(s,t,ii+1)=PLoss;
+            QLOSS1(s,t,ii+1)=QLoss;
+            FREQUENCY1(s,t,ii+1)=w;
+        end
+        [ff,x1]=objective_function(x,y,a,b,ld,ww,T,J,I,s,ii,pdg);
+        f(s,ii+1)=ff(s,1)+10^5.*     abs(svol1(s))^2+10^5.*     abs(svol2(s))^2;
+        gcf(s,1)=x1;
+    end
+    
+    
+    
+    %To find change in the values of f
+    for s=1:S
+        df(s,ii)= abs(f(s,(ii+1))-f(s,ii)) ;
+    end
+    
+    %for personal best values
+    fpm=min(f(:,ii+1));
+    
+    for k=1:S
+        if f(k,ii+1)==fpm
+            gb=k;
+        else
+        end
+    end
+    mpp=mp(:,:,gb,ii+1);
+    nqp=nq(:,:,gb,ii+1);
+    GCF(ii+1)=gcf(gb,1);
+    %     Prp=Pr(:,gb,ii+1);
+    %for Global best values updation
+    if min(f(:,(ii+1)))<fgm
+        fgm=min(f(:,(ii+1)));
+        
+        
+        for k=1:S
+            if f(k,ii+1)==fgm
+                gb=k;
+            else
+            end
+        end
+        
+        mpg=mp(:,:,gb,ii+1);
+        nqg=nq(:,:,gb,ii+1);
+        
+        
+    else
+    end
+    PDG=PDG1(:,gb,:,ii+1);
+    QDG=      QDG1(:,gb,:,ii+1);
+    PL=  PL1(:,gb,:,ii+1);
+    QL=  QL1(:,gb,:,ii+1);
+    VOLTAGE(:,:)=   VOLTAGE1(:,gb,:,ii+1);
+    ANGLE=ANGLE1(:,gb,:,ii+1);
+    PLOSS= PLOSS1(gb,:,ii+1);
+    QLOSS=  QLOSS1(gb,:,ii+1);
+    FREQUENCY=FREQUENCY1(gb,:,ii+1);
+    
+    
+    fff(ii+1,1)=fgm;
+    
+    % disp('| iteration  | optimum function  |violatio6 | ');
+    
+    fprintf(  '%3g',ii );fprintf('    ' );fprintf(  '%3g',w );fprintf('     ' ) ;fprintf('%3g',fgm);fprintf('     ' ) ;fprintf('%3g',fpm);fprintf('     ' );fprintf('%3g',sum(svol1));fprintf('   ' );fprintf('%3g',sum(svol2));fprintf('      ' );fprintf('%3g',sum(svol3));fprintf(' ' );fprintf('%3g',sum(svol4));fprintf('       ' );fprintf('%3g',sum(svol5));fprintf('        ' );fprintf('%3g',sum(svol6)); fprintf('\n');
+    
+    
+end
+%%
+% vol6
+% %Ploting of graph
+X=1:it;
+YY=fff(X,1);
+%YY=min(f(:,ii+1));
+plot(X,YY);
+
+
