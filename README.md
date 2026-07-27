@@ -11,7 +11,7 @@ This repository contains the implementation, dataset, and reproducible results f
 
 ## 🔍 Overview
 
-This project optimises day-ahead economic dispatch in an **islanded AC microgrid** using:
+This project optimizes day-ahead economic dispatch in an **islanded AC microgrid** using:
 
 | Module | Purpose |
 |--------|---------|
